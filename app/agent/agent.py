@@ -1,7 +1,7 @@
 import json
 
 from app.llm.client import LLMClient
-from app.tools.tasks import create_task
+from app.tools.tasks import create_task, list_today
 
 
 TOOLS = [
@@ -25,7 +25,19 @@ TOOLS = [
                 "required": ["title"],
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_today",
+            "description": "List the user's tasks scheduled for today",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -55,12 +67,20 @@ class TaskAgent:
 
         message = response.choices[0].message
 
+        # if not message.tool_calls:
+        #    return message.content
+
         if not message.tool_calls:
             return message.content
 
         tool_call = message.tool_calls[0]
+        tool_name = tool_call.function.name
 
-        if tool_call.function.name == "create_task":
+        # Диагностика
+        # print("Tool called:", tool_call.function.name)
+        # print("Tool arguments:", tool_call.function.arguments)
+
+        if tool_name == "create_task":
             arguments = json.loads(tool_call.function.arguments)
 
             result = create_task(
@@ -76,5 +96,20 @@ class TaskAgent:
                     else ""
                 )
             )
+
+        if tool_name == "list_today":
+            tasks = list_today(user_id=user_id)
+
+            if not tasks:
+                return "На сегодня задач нет."
+
+            lines = ["Твои задачи на сегодня:"]
+
+            for task in tasks:
+                lines.append(
+                    f"- {task['title']} ({task['status']})"
+                )
+
+            return "\n".join(lines)
 
         return "Unknown tool."
