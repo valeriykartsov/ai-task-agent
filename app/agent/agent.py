@@ -32,6 +32,10 @@ TOOLS = [
                         "type": "string",
                         "description": "Task due date in ISO 8601 format",
                     },
+                    "reminder_at": {
+                        "type": "string",
+                        "description": "Reminder date and time in ISO 8601 format",
+                    },
                 },
                 "required": ["title"],
             },
@@ -163,7 +167,7 @@ class TaskAgent:
                 return "Не удалось создать задачу: неверные параметры."
 
             # Разрешаем только параметры, поддерживаемые функцией create_task.
-            if set(arguments) - {"title", "due_at"}:
+            if set(arguments) - {"title", "due_at", "reminder_at"}:
                 logger.warning("Unexpected arguments for create_task")
                 return "Не удалось создать задачу: неверные параметры."
 
@@ -178,6 +182,12 @@ class TaskAgent:
             if due_at is not None and not isinstance(due_at, str):
                 logger.warning("Invalid due_at argument type")
                 return "Не удалось создать задачу: проверь формат даты."
+
+            # Проверяем тип времени напоминания, если оно передано.
+            reminder_at = arguments.get("reminder_at")
+            if reminder_at is not None and not isinstance(reminder_at, str):
+                logger.warning("Invalid reminder_at argument type")
+                return "Не удалось создать задачу: проверь время напоминания."
 
             # Создаём задачу от имени текущего пользователя.
             try:

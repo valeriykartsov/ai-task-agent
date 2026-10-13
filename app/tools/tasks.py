@@ -10,6 +10,7 @@ def create_task(
     user_id: str,
     title: str,
     due_at: str | None = None,
+    reminder_at: str | None = None,
 ) -> dict:
     # Открываем сессию для работы с базой данных.
     db = SessionLocal()
@@ -23,12 +24,20 @@ def create_task(
             else None
         )
 
+        # Преобразуем время напоминания в datetime, если оно указано.
+        parsed_reminder_at = (
+            datetime.fromisoformat(reminder_at)
+            if reminder_at
+            else None
+        )
+
         # Создаём объект задачи и указываем срок выполнения.
         task = Task(
             user_id=user_id,
             title=title,
             status="pending",
             due_at=parsed_due_at,
+            reminder_at=parsed_reminder_at,
         )
 
         db.add(task)
@@ -44,6 +53,11 @@ def create_task(
             "due_at": (
                 task.due_at.isoformat()
                 if task.due_at
+                else None
+            ),
+            "reminder_at": (
+                task.reminder_at.isoformat()
+                if task.reminder_at
                 else None
             ),
         }

@@ -20,6 +20,7 @@ class Task(Base):
     )
     due_at: Mapped[datetime | None] = mapped_column(DateTime)  # Срок выполнения.
     reminder_at: Mapped[datetime | None] = mapped_column(DateTime)  # Время напоминания.
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime)  # Время отправки напоминания.
 
     # Временные метки создания и последнего обновления записи.
     created_at: Mapped[datetime] = mapped_column(
