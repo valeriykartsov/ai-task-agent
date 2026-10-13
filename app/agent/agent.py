@@ -1,6 +1,7 @@
 import json
 import logging
 
+from datetime import datetime, timezone
 from app.llm.client import LLMClient
 from app.tools.tasks import (
     create_task,
@@ -130,7 +131,16 @@ class TaskAgent:
                         "role": "system",
                         "content": (
                             "You are a task management assistant. "
-                            "Use tools when the user wants to manage a task."
+                            "Use tools when the user wants to manage a task. "
+                            f"Current date and time: "
+                            f"{datetime.now(timezone.utc).isoformat()}. "
+                            "All dates and times must use UTC. "
+                            "Interpret relative dates such as today and tomorrow "
+                            "using the current date and time provided above. "
+                            "Never invent a date in the past when the user refers "
+                            "to a future date. "
+                            "If a reminder time is not specified and cannot be "
+                            "determined unambiguously, ask the user to clarify."
                         ),
                     },
                     {
