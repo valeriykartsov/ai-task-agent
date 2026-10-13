@@ -99,6 +99,14 @@ TOOLS = [
                         "type": "boolean",
                         "description": "Set true to remove the due date",
                     },
+                    "reminder_at": {
+                        "type": "string",
+                        "description": "New reminder date and time in ISO 8601 format",
+                    },
+                    "clear_reminder_at": {
+                        "type": "boolean",
+                        "description": "Set true to remove the reminder",
+                    },
                 },
                 "required": ["task_id"],
             },
@@ -195,6 +203,7 @@ class TaskAgent:
                     user_id=user_id,
                     title=title.strip(),
                     due_at=due_at,
+                    reminder_at=reminder_at,
                 )
             except ValueError:
                 # Например, дата не соответствует формату ISO 8601.
@@ -206,14 +215,15 @@ class TaskAgent:
                 return "Не удалось создать задачу. Попробуй ещё раз."
 
             # Возвращаем пользователю результат создания задачи.
-            return (
-                f"Task created: {result['title']}"
-                + (
-                    f" (due: {result['due_at']})"
-                    if result.get("due_at")
-                    else ""
-                )
-            )
+            response = f"Task created: {result['title']}"
+
+            if result.get("due_at"):
+                response += f" (due: {result['due_at']})"
+
+            if result.get("reminder_at"):
+                response += f" (reminder: {result['reminder_at']})"
+
+            return response
 
         if tool_name == "list_today":
             # Получаем задачи текущего пользователя, запланированные на сегодня.
@@ -276,6 +286,8 @@ class TaskAgent:
                 "due_at",
                 "status",
                 "clear_due_at",
+                "reminder_at",
+                "clear_reminder_at",
             }
 
             if set(arguments) - allowed_fields:
@@ -294,12 +306,20 @@ class TaskAgent:
             due_at = arguments.get("due_at")
             status = arguments.get("status")
             clear_due_at = arguments.get("clear_due_at", False)
+            reminder_at = arguments.get("reminder_at")
+            clear_reminder_at = arguments.get("clear_reminder_at", False)
 
             if title is not None and not isinstance(title, str):
                 return "Не удалось изменить задачу: неверное название."
 
             if due_at is not None and not isinstance(due_at, str):
                 return "Не удалось изменить задачу: неверный формат даты."
+
+            if reminder_at is not None and not isinstance(reminder_at, str):
+                return "Не удалось изменить задачу: неверное время напоминания."
+
+            if not isinstance(clear_reminder_at, bool):
+                return "Не удалось изменить задачу: неверный параметр напоминания."
 
             if status is not None and status not in {"pending", "completed"}:
                 return "Не удалось изменить задачу: неверный статус."
@@ -315,6 +335,8 @@ class TaskAgent:
                     due_at=due_at,
                     status=status,
                     clear_due_at=clear_due_at,
+                    reminder_at=reminder_at,
+                    clear_reminder_at=clear_reminder_at,
                 )
             except ValueError:
                 logger.exception("Invalid update_task arguments")
@@ -329,7 +351,8 @@ class TaskAgent:
             return (
                 f"Задача обновлена: {result['title']} "
                 f"(статус: {result['status']}, "
-                f"срок: {result['due_at'] or 'не указан'})."
+                f"срок: {result['due_at'] or 'не указан'}, "
+                f"напоминание: {result['reminder_at'] or 'не задано'})."
             )
 
         # Записываем информацию о неизвестном инструменте.

@@ -148,6 +148,8 @@ def update_task(
     due_at: str | None = None,
     status: str | None = None,
     clear_due_at: bool = False,
+    reminder_at: str | None = None,
+    clear_reminder_at: bool = False,
 ) -> dict | None:
     # Обновить существующую задачу, принадлежащую указанному пользователю.
     db = SessionLocal()
@@ -169,10 +171,19 @@ def update_task(
 
             task.title = title.strip()
 
-        if clear_due_at and due_at is not None:
+        # Нельзя одновременно задать и удалить напоминание.
+        if clear_reminder_at and reminder_at is not None:
             raise ValueError(
-                "due_at and clear_due_at cannot be used together"
+                "reminder_at and clear_reminder_at cannot be used together"
             )
+
+        if clear_reminder_at:
+            task.reminder_at = None
+            task.reminder_sent_at = None
+        elif reminder_at is not None:
+            task.reminder_at = datetime.fromisoformat(reminder_at)
+            # Новое время требует новой отправки напоминания.
+            task.reminder_sent_at = None
 
         if clear_due_at:
             task.due_at = None
@@ -190,6 +201,8 @@ def update_task(
             and due_at is None
             and status is None
             and not clear_due_at
+            and reminder_at is None
+            and not clear_reminder_at
         ):
             raise ValueError("No fields provided for update")
 
@@ -205,7 +218,76 @@ def update_task(
                 if task.due_at
                 else None
             ),
+            "reminder_at": (
+                task.reminder_at.isoformat()
+                if task.reminder_at
+                else None
+            ),
         }
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+def list_pending_reminders(limit: int = 100) -> list[dict]:
+    # Открываем сессию для работы с базой данных.
+    db = SessionLocal()
+
+    try:
+        # Получаем текущее время для поиска наступивших напоминаний.
+        now = datetime.now()
+
+        # Выбираем напоминания, которые пора отправить и ещё не отправляли.
+        statement = (
+            select(Task)
+            .where(
+                Task.reminder_at <= now,
+                Task.reminder_sent_at.is_(None),
+                Task.status != "completed",
+            )
+            .order_by(Task.reminder_at)
+            .limit(limit)
+        )
+
+        tasks = db.scalars(statement).all()
+
+        # Возвращаем данные, необходимые для доставки напоминаний.
+        return [
+            {
+                "task_id": task.id,
+                "user_id": task.user_id,
+                "title": task.title,
+                "reminder_at": task.reminder_at.isoformat(),
+            }
+            for task in tasks
+        ]
+
+    finally:
+        # Закрываем сессию даже в случае ошибки.
+        db.close()
+
+
+def mark_reminder_sent(task_id: int) -> bool:
+    # Открываем сессию для работы с базой данных.
+    db = SessionLocal()
+
+    try:
+        # Находим задачу по ID.
+        task = db.get(Task, task_id)
+
+        # Если задача не найдена, подтверждать отправку нечего.
+        if task is None:
+            return False
+
+        # Фиксируем время успешной отправки напоминания.
+        task.reminder_sent_at = datetime.now()
+
+        db.commit()
+        return True
 
     except Exception:
         db.rollback()
