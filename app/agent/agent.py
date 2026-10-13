@@ -2,7 +2,12 @@ import json
 import logging
 
 from app.llm.client import LLMClient
-from app.tools.tasks import create_task, list_overdue, list_today
+from app.tools.tasks import (
+    create_task,
+    list_overdue,
+    list_today,
+    update_task,
+)
 
 
 # Настраиваем логгер для записи технических ошибок агента.
@@ -53,6 +58,45 @@ TOOLS = [
                 "type": "object",
                 "properties": {},
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_task",
+            "description": (
+                "Update an existing task belonging to the user. "
+                "Use task_id to identify the task. "
+                "Only provide fields that should change. "
+                "Use clear_due_at=true to remove the due date."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID of the task to update",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New task title",
+                    },
+                    "due_at": {
+                        "type": "string",
+                        "description": "New due date in ISO 8601 format",
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "completed"],
+                        "description": "New task status",
+                    },
+                    "clear_due_at": {
+                        "type": "boolean",
+                        "description": "Set true to remove the due date",
+                    },
+                },
+                "required": ["task_id"],
             },
         },
     },
@@ -205,6 +249,78 @@ class TaskAgent:
                 )
 
             return "\n".join(lines)
+
+        if tool_name == "update_task":
+            try:
+                arguments = json.loads(tool_call.function.arguments)
+            except (json.JSONDecodeError, TypeError):
+                logger.exception("Invalid JSON arguments for update_task")
+                return "Не удалось разобрать параметры изменения задачи."
+
+            if not isinstance(arguments, dict):
+                return "Не удалось изменить задачу: неверные параметры."
+
+            allowed_fields = {
+                "task_id",
+                "title",
+                "due_at",
+                "status",
+                "clear_due_at",
+            }
+
+            if set(arguments) - allowed_fields:
+                return "Не удалось изменить задачу: неверные параметры."
+
+            task_id = arguments.get("task_id")
+
+            if (
+                isinstance(task_id, bool)
+                or not isinstance(task_id, int)
+                or task_id <= 0
+            ):
+                return "Не удалось изменить задачу: неверный ID."
+
+            title = arguments.get("title")
+            due_at = arguments.get("due_at")
+            status = arguments.get("status")
+            clear_due_at = arguments.get("clear_due_at", False)
+
+            if title is not None and not isinstance(title, str):
+                return "Не удалось изменить задачу: неверное название."
+
+            if due_at is not None and not isinstance(due_at, str):
+                return "Не удалось изменить задачу: неверный формат даты."
+
+            if status is not None and status not in {"pending", "completed"}:
+                return "Не удалось изменить задачу: неверный статус."
+
+            if not isinstance(clear_due_at, bool):
+                return "Не удалось изменить задачу: неверный параметр срока."
+
+            try:
+                result = update_task(
+                    task_id=task_id,
+                    user_id=user_id,
+                    title=title,
+                    due_at=due_at,
+                    status=status,
+                    clear_due_at=clear_due_at,
+                )
+            except ValueError:
+                logger.exception("Invalid update_task arguments")
+                return "Не удалось изменить задачу: проверь название, срок и статус."
+            except Exception:
+                logger.exception("update_task tool failed")
+                return "Не удалось изменить задачу. Попробуй ещё раз."
+
+            if result is None:
+                return "Задача не найдена."
+
+            return (
+                f"Задача обновлена: {result['title']} "
+                f"(статус: {result['status']}, "
+                f"срок: {result['due_at'] or 'не указан'})."
+            )
 
         # Записываем информацию о неизвестном инструменте.
         logger.warning("Unknown tool requested: %s", tool_name)

@@ -125,3 +125,77 @@ def list_overdue(user_id: str) -> list[dict]:
     finally:
         # Закрываем сессию даже в случае ошибки.
         db.close()
+
+
+def update_task(
+    task_id: int,
+    user_id: str,
+    title: str | None = None,
+    due_at: str | None = None,
+    status: str | None = None,
+    clear_due_at: bool = False,
+) -> dict | None:
+    # Обновить существующую задачу, принадлежащую указанному пользователю.
+    db = SessionLocal()
+
+    try:
+        task = db.scalar(
+            select(Task).where(
+                Task.id == task_id,
+                Task.user_id == user_id,
+            )
+        )
+
+        if task is None:
+            return None
+
+        if title is not None:
+            if not isinstance(title, str) or not title.strip():
+                raise ValueError("Task title cannot be empty")
+
+            task.title = title.strip()
+
+        if clear_due_at and due_at is not None:
+            raise ValueError(
+                "due_at and clear_due_at cannot be used together"
+            )
+
+        if clear_due_at:
+            task.due_at = None
+        elif due_at is not None:
+            task.due_at = datetime.fromisoformat(due_at)
+
+        if status is not None:
+            if status not in {"pending", "completed"}:
+                raise ValueError("Invalid task status")
+
+            task.status = status
+
+        if (
+            title is None
+            and due_at is None
+            and status is None
+            and not clear_due_at
+        ):
+            raise ValueError("No fields provided for update")
+
+        db.commit()
+        db.refresh(task)
+
+        return {
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "due_at": (
+                task.due_at.isoformat()
+                if task.due_at
+                else None
+            ),
+        }
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
