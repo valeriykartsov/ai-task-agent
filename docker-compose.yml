@@ -19,5 +19,32 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - TZ=UTC
+      - GENERIC_TIMEZONE=UTC
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_PROXY_HOPS=1
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - http
+      - n8n:5678
+      - --url=${N8N_WEBHOOK_URL}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    depends_on:
+      - n8n
+
 volumes:
   postgres_data:
+  n8n_data:
