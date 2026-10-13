@@ -135,6 +135,8 @@ class TaskAgent:
                             f"Current date and time: "
                             f"{datetime.now(timezone.utc).isoformat()}. "
                             "All dates and times must use UTC. "
+                            "When the user specifies a due date without a time, "
+                            "set the due time to 23:59:59 UTC on that date. "
                             "Interpret relative dates such as today and tomorrow "
                             "using the current date and time provided above. "
                             "Never invent a date in the past when the user refers "
