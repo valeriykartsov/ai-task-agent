@@ -2,7 +2,7 @@ import json
 import logging
 
 from app.llm.client import LLMClient
-from app.tools.tasks import create_task, list_today
+from app.tools.tasks import create_task, list_overdue, list_today
 
 
 # Настраиваем логгер для записи технических ошибок агента.
@@ -37,6 +37,18 @@ TOOLS = [
         "function": {
             "name": "list_today",
             "description": "List the user's tasks scheduled for today",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_overdue",
+            "description": "List the user's overdue and incomplete tasks",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -167,6 +179,29 @@ class TaskAgent:
             for task in tasks:
                 lines.append(
                     f"- {task['title']} ({task['status']})"
+                )
+
+            return "\n".join(lines)
+
+        if tool_name == "list_overdue":
+            # Получаем просроченные задачи текущего пользователя.
+            try:
+                tasks = list_overdue(user_id=user_id)
+            except Exception:
+                # Записываем ошибку получения задач из базы данных.
+                logger.exception("list_overdue tool failed")
+                return "Не удалось получить просроченные задачи. Попробуй ещё раз."
+
+            if not tasks:
+                return "Просроченных задач нет."
+
+            # Формируем читаемый список просроченных задач.
+            lines = ["Твои просроченные задачи:"]
+
+            for task in tasks:
+                lines.append(
+                    f"- {task['title']} ({task['status']}, "
+                    f"срок: {task['due_at']})"
                 )
 
             return "\n".join(lines)

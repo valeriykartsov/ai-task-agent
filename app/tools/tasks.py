@@ -88,3 +88,40 @@ def list_today(user_id: str) -> list[dict]:
 
     finally:
         db.close()
+
+
+def list_overdue(user_id: str) -> list[dict]:
+    # Открываем сессию для работы с базой данных.
+    db = SessionLocal()
+
+    try:
+        # Получаем текущую дату и время для определения просроченных задач.
+        now = datetime.now()
+
+        # Выбираем просроченные невыполненные задачи конкретного пользователя.
+        statement = (
+            select(Task)
+            .where(
+                Task.user_id == user_id,
+                Task.due_at < now,
+                Task.status != "completed",
+            )
+            .order_by(Task.due_at)
+        )
+
+        tasks = db.scalars(statement).all()
+
+        # Преобразуем ORM-объекты в словари для передачи агенту.
+        return [
+            {
+                "id": task.id,
+                "title": task.title,
+                "status": task.status,
+                "due_at": task.due_at.isoformat(),
+            }
+            for task in tasks
+        ]
+
+    finally:
+        # Закрываем сессию даже в случае ошибки.
+        db.close()
